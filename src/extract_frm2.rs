@@ -1,15 +1,11 @@
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use anyhow::Result;
 use zip::{CompressionMethod, write::FileOptions};
 use memchr::memmem;
-pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
-    let dst_path = dst_path.map(PathBuf::from).unwrap_or_else(|| {
-        src_path.parent().unwrap_or(Path::new("."))
-            .join(src_path.file_stem().unwrap())
-            .join("frm2.zip")
-    });
+pub fn main(src_path: &Path, dst_path: &Path) -> Result<()> {
+    let dst_path = dst_path.to_path_buf();
     anyhow::ensure!(
         dst_path.extension().unwrap_or_default() == "zip",
         "Destination must be a .zip file"

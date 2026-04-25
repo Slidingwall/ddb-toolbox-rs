@@ -65,10 +65,11 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
     ddi_model.read(None, false)?;
     println!("Creating DDB...");
     let mut ddb_f = File::create(&ddb_path)?;
-    let art_dict = ddi_model.ddi_data_dict["art"]
-        .as_object()
+    let art_dict = ddi_model.ddi_data_dict.get("art")
+        .and_then(|v| v.as_mapping())
         .ok_or_else(|| anyhow::anyhow!("Invalid ART data structure"))?;
-    for (cvvc, art_items) in art_dict {
+    for (cvvc_val, art_items_val) in art_dict {
+        let cvvc = cvvc_val.as_str().unwrap_or_default();
         let phonemes: Vec<_> = cvvc.split(' ').collect();
         let mut art_file = singer_path.join("voice").join("articulation");
         for phoneme in phonemes.iter() {
@@ -82,8 +83,10 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
         );
         let art_bytes = std::fs::read(&art_file)?;
         let mut art_data = Cursor::new(&art_bytes);
-        for art_item in art_items.as_array().unwrap() {
-            for epr_info in art_item["epr"].as_array().unwrap() {
+        let art_items = art_items_val.as_sequence().unwrap();
+        for art_item in art_items {
+            let epr_list = art_item.get("epr").and_then(|v| v.as_sequence()).unwrap();
+            for epr_info in epr_list {
                 let epr_str = epr_info.as_str().unwrap();
                 let (ddi_epr_pos_str, epr_offset_str) = epr_str.split_once('=').unwrap();
                 let ddi_epr_pos = parse_hex_usize(ddi_epr_pos_str)?;
@@ -93,10 +96,10 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
                 ddi_data.seek(SeekFrom::Start(ddi_epr_pos as u64))?;
                 ddi_data.write_all(&ddb_epr_offset.to_le_bytes())?;
             }
-            let snd_str = art_item["snd"].as_str().unwrap();
+            let snd_str = art_item.get("snd").and_then(|v| v.as_str()).unwrap();
             let (ddi_snd_pos_str, t) = snd_str.split_once('=').unwrap();
             let (snd_offset_str, _) = t.split_once('_').unwrap();
-            let snd_start_str = art_item["snd_start"].as_str().unwrap();
+            let snd_start_str = art_item.get("snd_start").and_then(|v| v.as_str()).unwrap();
             let (_ddi_snd_pos2_str, t2) = snd_start_str.split_once('=').unwrap();
             let (snd_offset2_str, _) = t2.split_once('_').unwrap();
             let ddi_snd_pos = parse_hex_usize(ddi_snd_pos_str)?;
@@ -110,11 +113,13 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
             ddi_data.write_all(&(ddb_snd_offset + offset2_delta as u64).to_le_bytes())?;
         }
     }
-    let sta_dict = ddi_model.ddi_data_dict["sta"]
-        .as_object()
+    let sta_dict = ddi_model.ddi_data_dict.get("sta")
+        .and_then(|v| v.as_mapping())
         .ok_or_else(|| anyhow::anyhow!("Invalid STA data structure"))?;
-    for (phoneme, sta_items) in sta_dict {
-        for (idx, sta_item) in sta_items.as_array().unwrap().iter().enumerate() {
+    for (phoneme_val, sta_items_val) in sta_dict {
+        let phoneme = phoneme_val.as_str().unwrap_or_default();
+        let sta_items = sta_items_val.as_sequence().unwrap();
+        for (idx, sta_item) in sta_items.iter().enumerate() {
             let sta_file = singer_path
                 .join("voice/stationary/normal")
                 .join(escape_filename(phoneme))
@@ -127,7 +132,8 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
             );
             let sta_bytes = std::fs::read(&sta_file)?;
             let mut sta_data = Cursor::new(&sta_bytes);
-            for epr_info in sta_item["epr"].as_array().unwrap() {
+            let epr_list = sta_item.get("epr").and_then(|v| v.as_sequence()).unwrap();
+            for epr_info in epr_list {
                 let epr_str = epr_info.as_str().unwrap();
                 let (ddi_epr_pos_str, epr_offset_str) = epr_str.split_once('=').unwrap();
                 let ddi_epr_pos = parse_hex_usize(ddi_epr_pos_str)?;
@@ -137,7 +143,7 @@ pub fn main(src_path: &Path, dst_path: Option<&Path>) -> Result<()> {
                 ddi_data.seek(SeekFrom::Start(ddi_epr_pos as u64))?;
                 ddi_data.write_all(&ddb_epr_offset.to_le_bytes())?;
             }
-            let snd_str = sta_item["snd"].as_str().unwrap();
+            let snd_str = sta_item.get("snd").and_then(|v| v.as_str()).unwrap();
             let (ddi_snd_pos_str, t) = snd_str.split_once('=').unwrap();
             let (snd_offset_str, _) = t.split_once('_').unwrap();
             let ddi_snd_pos = parse_hex_usize(ddi_snd_pos_str)?;

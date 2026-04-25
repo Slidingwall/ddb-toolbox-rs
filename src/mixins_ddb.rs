@@ -124,25 +124,29 @@ fn mixins_vqm(
     let mut meta_list = Vec::new();
     let mixins_vqm = mixins_model.vqm_data.as_ref().unwrap();
     for (idx, info) in mixins_vqm {
-        let epr_list = info["epr"]
-            .as_array()
+        let epr_list = info.get("epr")
+            .and_then(|v| v.as_sequence())
             .unwrap()
             .iter()
             .map(|e| copy_epr(mixins_ddb, output, e.as_str().unwrap()))
             .collect::<Result<Vec<_>>>()?;
-        let (snd_id, snd_off) =
-            copy_snd_common(mixins_ddb, output, info["snd"].as_str().unwrap(), None)?;
+        let (snd_id, snd_off) = copy_snd_common(
+            mixins_ddb,
+            output,
+            info.get("snd").and_then(|v| v.as_str()).unwrap(),
+            None,
+        )?;
         meta_list.push(VqmMeta {
             idx: idx.to_string(),
             epr: epr_list,
             snd_id,
             snd: snd_off,
-            fs: info["fs"].as_u64().unwrap() as u32,
-            duration: info["duration"].as_f64().unwrap(),
-            pitch2: info["pitch2"].as_f64().unwrap() as f32,
-            unknown2: info["unknown2"].as_f64().unwrap() as f32,
-            tempo: info["tempo"].as_f64().unwrap() as f32,
-            dynamics: info["dynamics"].as_f64().unwrap() as f32,
+            fs: info.get("fs").and_then(|v| v.as_u64()).unwrap() as u32,
+            duration: info.get("duration").and_then(|v| v.as_f64()).unwrap(),
+            pitch2: info.get("pitch2").and_then(|v| v.as_f64()).unwrap() as f32,
+            unknown2: info.get("unknown2").and_then(|v| v.as_f64()).unwrap() as f32,
+            tempo: info.get("tempo").and_then(|v| v.as_f64()).unwrap() as f32,
+            dynamics: info.get("dynamics").and_then(|v| v.as_f64()).unwrap() as f32,
         });
     }
     let vqm_stream = create_vqm_stream(&meta_list);
@@ -184,7 +188,7 @@ fn mixins_sta2vqm(
     let mixins_sta = mixins_model
         .sta_data
         .values()
-        .find(|s| s["phoneme"].as_str().unwrap() == sta2vqm_phoneme)
+        .find(|s| s.get("phoneme").and_then(|v| v.as_str()).unwrap_or_default() == sta2vqm_phoneme)
         .ok_or_else(|| {
             anyhow!(
                 "Mixins DDI doesn't have stationary entry for phoneme \"{}\"",
@@ -192,9 +196,9 @@ fn mixins_sta2vqm(
             )
         })?;
     let mut meta_list = Vec::new();
-    let stap_map = mixins_sta["stap"].as_object().unwrap();
+    let stap_map = mixins_sta.get("stap").and_then(|v| v.as_mapping()).unwrap();
     for (idx, sta_item) in stap_map.values().enumerate() {
-        let epr_arr = sta_item["epr"].as_array().unwrap();
+        let epr_arr = sta_item.get("epr").and_then(|v| v.as_sequence()).unwrap();
         if epr_arr.len() < 100 {
             println!(
                 "Warning: EpR count is less than 100, EpR count: {}",
@@ -206,7 +210,7 @@ fn mixins_sta2vqm(
             .iter()
             .map(|e| copy_epr(mixins_ddb, output, e.as_str().unwrap()))
             .collect::<Result<Vec<_>>>()?;
-        let snd_str = sta_item["snd"].as_str().unwrap();
+        let snd_str = sta_item.get("snd").and_then(|v| v.as_str()).unwrap();
         let (_, t) = snd_str.split_once('=').unwrap();
         let (off_str, _) = t.split_once('_').unwrap();
         let off = parse_hex_usize(off_str)?;
@@ -218,12 +222,12 @@ fn mixins_sta2vqm(
             epr: epr_list,
             snd_id,
             snd: snd_off,
-            fs: sta_item["fs"].as_u64().unwrap() as u32,
-            duration: sta_item["duration"].as_f64().unwrap(),
-            pitch2: sta_item["pitch2"].as_f64().unwrap() as f32,
-            unknown2: sta_item["unknown2"].as_f64().unwrap() as f32,
-            tempo: sta_item["tempo"].as_f64().unwrap() as f32,
-            dynamics: sta_item["dynamics"].as_f64().unwrap() as f32,
+            fs: sta_item.get("fs").and_then(|v| v.as_u64()).unwrap() as u32,
+            duration: sta_item.get("duration").and_then(|v| v.as_f64()).unwrap(),
+            pitch2: sta_item.get("pitch2").and_then(|v| v.as_f64()).unwrap() as f32,
+            unknown2: sta_item.get("unknown2").and_then(|v| v.as_f64()).unwrap() as f32,
+            tempo: sta_item.get("tempo").and_then(|v| v.as_f64()).unwrap() as f32,
+            dynamics: sta_item.get("dynamics").and_then(|v| v.as_f64()).unwrap() as f32,
         });
     }
     let vqm_stream = create_vqm_stream(&meta_list);

@@ -7,7 +7,7 @@ edition = "2024"
 anyhow = "1.0"
 memchr = "2.7"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_yaml = "0.9.34-deprecated"
 iced = "0.14.0"
 rfd = "0.17.2"
 zip = "8.5.1"

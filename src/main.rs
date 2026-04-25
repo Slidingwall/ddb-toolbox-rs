@@ -24,7 +24,6 @@ pub enum MixinsMode {
 #[derive(Debug, Clone)]
 pub enum Message {
     BrowseDdi,
-    BrowseDdb,
     BrowseOutDir,
     BrowseTree,
     BrowsePackOut,
@@ -46,7 +45,6 @@ pub enum Message {
 #[derive(Default)]
 pub struct AppState {
     ddi_file: String,
-    ddb_file: String,
     out_dir: String,
     tree_path: String,
     pack_out: String,
@@ -87,14 +85,6 @@ impl AppState {
             Message::BrowseDdi => {
                 self.ddi_file = FileDialog::new()
                     .add_filter("ddi", &["ddi"])
-                    .pick_file()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default();
-                Task::none()
-            }
-            Message::BrowseDdb => {
-                self.ddb_file = FileDialog::new()
-                    .add_filter("ddb", &["ddb"])
                     .pick_file()
                     .map(|p| p.display().to_string())
                     .unwrap_or_default();
@@ -149,13 +139,16 @@ impl AppState {
                 if self.is_busy { return Task::none(); }
                 self.is_busy = true;
                 let ddi = self.ddi_file.clone();
-                let out = self.out_dir.clone();
+                let out_root = self.out_dir.clone(); 
                 let gl = self.gen_lab;
                 let gs = self.gen_seg;
                 let cl = self.classify;
                 Task::perform(async move {
                     let res = thread::spawn(move || {
-                        extract_wav::main(Path::new(&ddi), PathBuf::from(&out), gl, gs, cl)
+                        let ddi_path = Path::new(&ddi);
+                        let stem = ddi_path.file_stem().unwrap_or_default();
+                        let out = PathBuf::from(&out_root).join(stem);
+                        extract_wav::main(ddi_path, out, gl, gs, cl)
                     }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("panic")));
                     res.map_err(|e| e.to_string())
                 }, Message::TaskCompleted)
@@ -164,11 +157,15 @@ impl AppState {
                 if self.is_busy { return Task::none(); }
                 self.is_busy = true;
                 let path = self.ddi_file.clone();
+                let out_root = self.out_dir.clone(); 
                 let st = self.save_temp;
                 let co = self.cat_only;
                 Task::perform(async move {
                     let res = thread::spawn(move || {
-                        extract_ddi::main(Path::new(&path), st, co)
+                        let ddi_path = Path::new(&path);
+                        let stem = ddi_path.file_stem().unwrap_or_default();
+                        let out = PathBuf::from(&out_root).join(stem);
+                        extract_ddi::main(ddi_path, &out, st, co)
                     }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("panic")));
                     res.map_err(|e| e.to_string())
                 }, Message::TaskCompleted)
@@ -176,12 +173,17 @@ impl AppState {
             Message::RunExtractFrm2 => {
                 if self.is_busy { return Task::none(); }
                 self.is_busy = true;
-                let ddb = self.ddb_file.clone();
-                let out = self.out_dir.clone();
+                let ddi = self.ddi_file.clone();
+                let out_root = self.out_dir.clone(); 
                 Task::perform(async move {
-                    let zip = PathBuf::from(&out).join("frm2.zip");
                     let res = thread::spawn(move || {
-                        extract_frm2::main(Path::new(&ddb), Some(&zip))
+                        let ddi_path = Path::new(&ddi);
+                        let ddb_path = ddi_path.with_extension("ddb");
+                        let stem = ddi_path.file_stem().unwrap_or_default();
+                        let out_dir = PathBuf::from(&out_root).join(stem);
+                        std::fs::create_dir_all(&out_dir)?; 
+                        let zip = out_dir.join("frm2.zip");
+                        extract_frm2::main(&ddb_path, &zip)
                     }).join().unwrap_or_else(|_| Err(anyhow::anyhow!("panic")));
                     res.map_err(|e| e.to_string())
                 }, Message::TaskCompleted)
@@ -235,11 +237,6 @@ impl AppState {
                 text("DDI File:"),
                 text_input("Select DDI file", &self.ddi_file),
                 button("Browse").on_press(Message::BrowseDdi),
-            ].spacing(8).align_y(Alignment::Center),
-            row![
-                text("DDB File:"),
-                text_input("Select DDB file", &self.ddb_file),
-                button("Browse").on_press(Message::BrowseDdb),
             ].spacing(8).align_y(Alignment::Center),
             row![
                 text("Output:"),
