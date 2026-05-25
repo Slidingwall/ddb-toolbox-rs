@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BUILD_MODE: --release
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -28,6 +27,15 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+        components: llvm-tools-preview  
+
+    - name: Install musl tools (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+    - name: Add musl target (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: rustup target add x86_64-unknown-linux-musl
 
     - name: Cache Cargo dependencies
       uses: actions/cache@v4
@@ -39,10 +47,16 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Build Release
-      run: cargo build ${{ env.BUILD_MODE }} --verbose
+      run: |
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          cargo build ${{ env.BUILD_MODE }} --verbose --target x86_64-unknown-linux-musl
+        else
+          cargo build ${{ env.BUILD_MODE }} --verbose
+        fi
+      shell: bash
 
     - name: Run tests
-      run: cargo test ${{ env.BUILD_MODE }} --verbose
+      run: cargo test ${{ env.BUILD_MODE }} --verbose --no-run
 
     - name: Upload Release Binary
       uses: actions/upload-artifact@v4
@@ -50,4 +64,10 @@ jobs:
         name: release-${{ matrix.os }}
         path: |
           target/release/*.exe
-          target/release/[!.]*
+          target/x86_64-unknown-linux-musl/release/*
+          target/release/!(*.d)
+          !target/release/*.d
+          !target/release/*.rlib
+          !target/release/.fingerprint
+          !target/release/build
+          !target/release/deps
